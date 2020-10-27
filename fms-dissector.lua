@@ -157,43 +157,61 @@ udp_port:add(1120, fms_to_ds_udp_protocol)
 
 
 
-mode_types = {
-  [0] = "TeleOp",
-  [1] = "Test",
-  [2] = "Autonomous"
+tag_types = {
+  [0x00] = "WPILib Version",
+  [0x01] = "RIO Version",
+  [0x02] = "DS Version",
+  [0x03] = "PDP Version",
+  [0x04] = "PCM Version",
+  [0x05] = "CANJag Version",
+  [0x06] = "CANTalon Version",
+  [0x07] = "Third Party Device Version",
+  [0x14] = "Event Code",
+  [0x15] = "Usage Report",
+  [0x16] = "Log Data",
+  [0x17] = "Error and Event Data",
+  [0x18] = "Team Number",
+  [0x19] = "Station Info",
+  [0x1a] = "Challenge Question",
+  [0x1b] = "Challenge Response",
+  [0x1c] = "Game Data"
 }
 
 fms_tcp_protocol = Proto("fms_to_ds_tcp",  "FMS TCP")
 
 size = ProtoField.uint16("fms_to_ds_tcp.size", "Size", base.DEC)
+tag_type = ProtoField.uint8("fms_to_ds_tcp.tag_type", "Tag Type", base.HEX, tag_types)
+team_num = ProtoField.uint16("ds_to_fms_udp.tags.team_num", "Team Num", base.DEC)
 
 fms_tcp_protocol.fields = {
-  size
+  size,
+  tag_type,
+  team_num
 }
 
 function fms_tcp_protocol.dissector(buffer, pinfo, tree)
-  if pinfo.dst_port == 1750 then
 
-    local length = buffer:len()
-    if length == 0 then return end
-    if length ~= buffer:reported_len() then return 0 end
-    if length > 100 then return 0 end
+  local length = buffer:len()
+  if length == 0 then return end
+  if length ~= buffer:reported_len() then return 0 end
+  if length > 100 then return 0 end
 
-    local sizeInt = buffer(0, 2):uint()
-    if (sizeInt > length) then
-      pinfo.desegment_len = size - length
-      pinfo.desegment_offset = 0
-      return length
-    end
-
-    pinfo.cols.protocol = fms_tcp_protocol.name
-
-    local subtree = tree:add(fms_tcp_protocol, buffer(), "FMS to Driver Station Data")
-    subtree:add(size, buffer(0,2))
-
+  local sizeInt = buffer(0, 2):uint()
+  if (sizeInt > length) then
+    pinfo.desegment_len = size - length
+    pinfo.desegment_offset = 0
     return length
-  else
-    return 0
+  end
+
+  pinfo.cols.protocol = fms_tcp_protocol.name
+
+  local subtree = tree:add(fms_tcp_protocol, buffer(), "FMS to Driver Station Data")
+  subtree:add(size, buffer(0,2))
+  local tagId = buffer(2,1)
+  subtree:add(tag_type, tagId)
+
+  if (tagId == 0x18) then
+    subtree:add(team_num, buffer(3,2))
   end
 
 end
