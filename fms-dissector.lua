@@ -58,8 +58,8 @@ function ds_to_fms_udp_protocol.dissector(buffer, pinfo, tree)
 
   subtree:add(team_num, buffer(4,2))
   batValue = buffer(6,2):uint()
-  batWhole = math.floor(batValue/100)
-  batDecimal = (batValue%100) / 256
+  batWhole = batValue >> 8
+  batDecimal = (batValue & 0xFF) / 0xFF
   subtree:add(battery, buffer(6,2), batWhole+batDecimal)
 
 end
