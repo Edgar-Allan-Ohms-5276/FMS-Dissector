@@ -9,6 +9,14 @@ mode_types = {
   [2] = "Autonomous"
 }
 
+ds_to_fms_udp_tag_types = {
+  [0x00] = "Field Radio Metrics",
+  [0x01] = "Comms Metrics",
+  [0x02] = "Laptop Metrics",
+  [0x03] = "Robot Radio Metrics",
+  [0x04] = "PD Info"
+}
+
 ds_to_fms_udp_protocol = Proto("ds_to_fms_udp",  "Driver Station to FMS UDP")
 
 sequence_num = ProtoField.uint16("ds_to_fms_udp.sequence_num", "Sequence Number", base.DEC)
@@ -22,6 +30,20 @@ enabled = ProtoField.uint8("ds_to_fms_udp.status_byte.enabled", "Enabled", base.
 mode = ProtoField.uint8("ds_to_fms_udp.status_byte.mode", "Mode", base.DEC, mode_types, 0x03)
 team_num = ProtoField.uint16("ds_to_fms_udp.team_num", "Team Num", base.DEC)
 battery = ProtoField.float("ds_to_fms_udp.battery", "Battery Voltage", base.DEC)
+tags_data = ProtoField.bytes("ds_to_fms_udp.tags", "Tags", base.NONE)
+tag_data = ProtoField.uint8("ds_to_fms_udp.tag", "Tag", base.HEX, ds_to_fms_udp_tag_types)
+tag_size = ProtoField.uint8("ds_to_fms_udp.tag.size", "Tag Size", base.DEC)
+tag_id = ProtoField.uint8("ds_to_fms_udp.tag.id", "Tag ID", base.HEX, ds_to_fms_udp_tag_types)
+tag_00_signal_strength = ProtoField.uint8("ds_to_fms_udp.tag.signal_strength", "Signal Strength", base.DEC)
+tag_00_bandwidth_utilization = ProtoField.uint16("ds_to_fms_udp.tag.bandwidth_utilization", "Bandwidth Utilization", base.DEC)
+tag_01_lost_packets = ProtoField.uint16("ds_to_fms_udp.tag.lost_packets", "Lost Packets", base.DEC)
+tag_01_sent_packets = ProtoField.uint16("ds_to_fms_udp.tag.sent_packets", "Sent Packets", base.DEC)
+tag_01_trip_time = ProtoField.uint8("ds_to_fms_udp.tag.trip_time", "Average Trip Time", base.DEC)
+tag_02_battery_pct = ProtoField.uint8("ds_to_fms_udp.tag.battery_pct", "Battery Percent", base.DEC)
+tag_02_cpu_pct = ProtoField.uint8("ds_to_fms_udp.tag.cpu_pct", "CPU Percent", base.DEC)
+tag_03_signal_strength = ProtoField.uint8("ds_to_fms_udp.tag.signal_strength", "Signal Strength", base.DEC)
+tag_03_bandwidth_utilization = ProtoField.uint16("ds_to_fms_udp.tag.bandwidth_utilization", "Bandwidth Utilization", base.DEC)
+
 ds_to_fms_udp_protocol.fields = { 
   sequence_num,
   comm_version,
@@ -33,7 +55,20 @@ ds_to_fms_udp_protocol.fields = {
   enabled,
   mode,
   team_num,
-  battery
+  battery,
+  tags_data,
+  tag_data,
+  tag_size,
+  tag_id,
+  tag_00_signal_strength,
+  tag_00_bandwidth_utilization,
+  tag_01_lost_packets,
+  tag_01_sent_packets,
+  tag_01_trip_time,
+  tag_02_battery_pct,
+  tag_02_cpu_pct,
+  tag_03_signal_strength,
+  tag_03_bandwidth_utilization
  }
 
 function ds_to_fms_udp_protocol.dissector(buffer, pinfo, tree)
@@ -57,10 +92,45 @@ function ds_to_fms_udp_protocol.dissector(buffer, pinfo, tree)
   statbytTree:add(mode, buffer(3,1), bit.band(staybyt, 0x03))
 
   subtree:add(team_num, buffer(4,2))
-  batValue = buffer(6,2):uint()
-  batWhole = batValue >> 8
-  batDecimal = (batValue & 0xFF) / 0xFF
+  local batValue = buffer(6,2):uint()
+  local batWhole = batValue >> 8
+  local batDecimal = (batValue & 0xFF) / 0xFF
   subtree:add(battery, buffer(6,2), batWhole+batDecimal)
+
+  local tagsBuf = buffer(8)
+  local tagsTree = subtree:add(tags_data, tagsBuf)
+
+  local offset = 0
+  while offset < tagsBuf:len() do
+    local tagSizeTvb = tagsBuf(offset, 1)
+    local tagSize = tagSizeTvb:uint()
+    local tagBuf = tagsBuf(offset, tagSize+1)
+    local tagIdTvb = tagBuf(1, 1)
+    local tagId = tagIdTvb:uint()
+
+    local tagTree = tagsTree:add(tag_data, tagBuf, tagId)
+
+    tagTree:add(tag_size, tagSizeTvb)
+    
+    tagTree:add(tag_id, tagIdTvb)
+
+    if tagId == 0x00 then
+      tagTree:add(tag_00_signal_strength, tagBuf(2, 1))
+      tagTree:add(tag_00_bandwidth_utilization, tagBuf(3, 2))
+    elseif tagId == 0x01 then
+      tagTree:add(tag_01_lost_packets, tagBuf(2, 2))
+      tagTree:add(tag_01_sent_packets, tagBuf(4, 2))
+      tagTree:add(tag_01_trip_time, tagBuf(6, 1))
+    elseif tagId == 0x02 then
+      tagTree:add(tag_02_battery_pct, tagBuf(2, 1))
+      tagTree:add(tag_02_cpu_pct, tagBuf(3, 1))
+    elseif tagId == 0x03 then
+      tagTree:add(tag_03_signal_strength, tagBuf(2, 1))
+      tagTree:add(tag_03_bandwidth_utilization, tagBuf(3, 2))
+    end
+
+    offset = offset + tagSize+1
+  end
 
 end
 
