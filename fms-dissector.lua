@@ -181,7 +181,7 @@ fms_tcp_protocol = Proto("fms_to_ds_tcp",  "FMS TCP")
 
 size = ProtoField.uint16("fms_to_ds_tcp.size", "Size", base.DEC)
 tag_type = ProtoField.uint8("fms_to_ds_tcp.tag_type", "Tag Type", base.HEX, tag_types)
-team_num = ProtoField.uint16("ds_to_fms_udp.tags.team_num", "Team Num", base.DEC)
+team_num = ProtoField.uint16("fms_to_ds_tcp.team_num", "Team Num", base.DEC)
 
 fms_tcp_protocol.fields = {
   size,
